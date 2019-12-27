@@ -45,13 +45,15 @@ class Remover(object):
         
     def run(self):
         """RUN"""
-        self.ReadFile()
-        self.RemoveComment = self.Driver.Handle(self)
-        self.Handle()
-        for i in self.Comment:
-            print(i.encode("utf-8"))
-        self.WriteFile()
-
+        try:
+            self.ReadFile()
+            self.RemoveComment = self.Driver.Handle(self)
+            self.Handle()
+            for i in self.Comment:
+                print(i.encode("utf-8"))
+            self.WriteFile()
+        except:
+            pass
     def ReadFile(self):
         """读取文件"""
         f = open(self.Path, "rb")
