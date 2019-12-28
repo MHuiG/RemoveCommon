@@ -11,7 +11,7 @@ def walkFile(FilePath):
     for root, dirs, files in os.walk(FilePath):
         for f in files:
             Path=os.path.join(root, f)
-            print(Path)
+            #print(Path)
             if os.path.splitext(f)[1] in [".py"]:
                 driver=PY()
                 Remover(Path,driver).run()
@@ -23,22 +23,20 @@ def walkFile(FilePath):
                 Remover(Path,driver).run()
 
 class Remover(object):
-    """Remover
+    """Remover过滤器
     Attributes:
         Path: 文件路径
         Driver: 文件类型驱动
-        OldFileLines: 原始文件
-        MultilineComment: 多行注释列表
+        OldFileLines: 原始文件行列表
         RemoveComment: 需要删除的所有注释的行号列表
         Comment: 注释内容列表
         NoComment: 无注释内容列表
     """
     def __init__(self,Path,Driver):
-        """Inits"""
+        """初始化"""
         self.Path=Path
         self.Driver=Driver
         self.OldFileLines=list()
-        self.MultilineComment=list()
         self.RemoveComment=list()
         self.Comment = list()
         self.NoComment = list()
@@ -47,13 +45,13 @@ class Remover(object):
         """RUN"""
         try:
             self.ReadFile()
-            self.RemoveComment = self.Driver.Handle(self)
-            self.Handle()
-            for i in self.Comment:
-                print(i.encode("utf-8"))
+            self.RemoverHandle()
+            #self.PrintComment()
             self.WriteFile()
-        except:
-            pass
+        except Exception as e:
+            print(self.Path)
+            print(e)
+            self.ERRORHandle()
     def ReadFile(self):
         """读取文件"""
         f = open(self.Path, "rb")
@@ -61,31 +59,45 @@ class Remover(object):
         f.close()
         self.OldFileLines = OldFile.splitlines()
 
-    def Handle(self):
-        """获取 注释和无注释 内容到列表中"""
-        #去重并排序，得到所有注释行号的列表
+    def RemoverHandle(self):
+        """过滤处理"""
+        self.RemoveComment = self.Driver.DriverHandle(self.OldFileLines)
         RemoveCommentNumber = sorted(set(self.RemoveComment))
         for i in RemoveCommentNumber:
             self.Comment.append(self.OldFileLines[i])
-        # 创建与源文件总行号相同的列表 0,1,2,3...
         NewFileLines = list(i for i in range(len(self.OldFileLines)))
-        # 删除注释的行号，留下无注释的行号 的列表集合
         for i in RemoveCommentNumber:
             NewFileLines.remove(i)
         for i in NewFileLines:
-            self.NoComment.append(self.OldFileLines[i])
+            temp=self.OldFileLines[i]
+            temp=self.Driver.CheckLine(temp)
+            temp=self.Driver.CheckOne(temp)
+            self.NoComment.append(temp)
 
     def WriteFile(self):
         """写入文件"""
         with open(self.Path,"wb") as f:
             for i in self.NoComment:
-                i=self.Driver.CheckLine(i)
-                i=self.Driver.CheckOne(i)
                 f.write(i.encode("utf-8"))
                 f.write("\n".encode("utf-8"))
-                
+
+    def PrintComment(self):
+        """打印注释"""
+        for i in self.Comment:
+            print(i.encode("utf-8"))
+    def ERRORHandle(self):
+        """异常处理"""
+        try:
+            os.mkdir(".ERROR/")
+        except:
+            pass
+        try:
+            import shutil
+            shutil.copy(self.Path,".ERROR/")
+        except:
+            pass
 class Driver(object):
-    """Driver
+    """Driver过滤器驱动
     Attributes:
         OldFileLines: 原始文件
         MultilineComment: 多行注释列表
@@ -93,51 +105,62 @@ class Driver(object):
         flag: 标记
     """
     def __init__(self):
-        """Inits"""
+        """初始化"""
         self.OldFileLines=list()
         self.MultilineComment=list()
         self.RemoveComment=list()
         self.flag=0
         
-    def Handle(self,Remover):
-        """处理"""
-        self.OldFileLines=Remover.OldFileLines
+    def DriverHandle(self,OldFileLines):
+        """过滤器驱动处理
+            将两个多行注释行号之间所有的行添加到 # 号列表中
+        Args:
+            OldFileLines: 原始文件
+        return:
+            需要删除的所有注释的 行号 集合
+        """
+        self.OldFileLines=OldFileLines
         i = 0
         for line in self.OldFileLines:
-            # Remove 空行以及全是空格的行
+            # Remove 空行
             ret_0 = re.match(r"^[\s]*$",line)
             if ret_0:
                 self.RemoveComment.append(i)
             self.Check(line,i)
             i=i+1
-
-        # 将两个多行注释行号之间所有的行添加到 # 号列表中
         while self.MultilineComment != []:
-            # 从列表中移出最后两个元素
             a = self.MultilineComment.pop()
             b = self.MultilineComment.pop()
             temp = b
             while temp <= a:
                 self.RemoveComment.append(temp)
                 temp += 1
-        # 返回需要删除的所有注释的 行号 集合
         return self.RemoveComment
 
     def CheckOne(self,s):
-        """Remove空行"""
+        """移除空行(单行检查规则)"""
         a=re.compile("^[\s]*$")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
         return s
 
     def Check(self,line,i):
-        """Check"""
+        """多行检查规则
+        Args:
+            line: 原始文件行
+            i: line所对应的行号
+        """
         pass
     
     def CheckLine(self,s):
-        """CheckLine"""
+        """单行检查Remove规则
+        Args:
+            s: 原始文件行
+        return:
+            处理后的行
+        """
         return s
 
 class PY(Driver):
@@ -152,24 +175,23 @@ class PY(Driver):
             pass
         elif ret_1:
             self.RemoveComment.append(i)
-        # 符号 =""" 独占一行 pass
+        # Pass """....""" 
+        a=re.compile("\"\"\".*\"\"\"")
+        b=re.compile("=[r\s]*\"\"\".*\"\"\"")
+        # Pass ="""
+        c=re.compile(".*=[\sr]*\"\"\".*")
+        # Pass =""" 独占一行
         ret_2 = re.match(r".*=[\sr]*\"\"\".*",line)
         if ret_2:
             #print(line)
             self.flag=1
-        # 符号 # XXX""" 独占一行 pass
-        ret_2 = re.match(r".*#.*\"\"\".*",line)
-        if ret_2:
-            #print(line)
-            self.flag=1
-        # """....""" pass
-        a=re.compile("\"\"\".*\"\"\"")
-        b=re.compile("=[r\s]*\"\"\".*\"\"\"")
-        # =""" pass
-        c=re.compile(".*=[\sr]*\"\"\".*")
-        
         if  (len(a.findall(line))==0)&(len(b.findall(line))==0)&(len(c.findall(line))==0):
-            # 符号 """XXXXX or """独占一行 add
+            # Pass # XXX""" 独占一行
+            ret_2 = re.match(r".*#.*\"\"\".*",line)
+            if ret_2:
+                #print(line)
+                self.flag=1
+            # Remove """XXXXX 独占一行
             ret_2 = re.match(r"[\sr]*(?!\=.*)\"\"\"(?!.*\"\"\")",line)
             if ret_2:
                 if self.flag==0:
@@ -179,8 +201,8 @@ class PY(Driver):
                     #print(line)
                     self.flag=0
             else:
-                # 符号 XXXX""" 独占一行 add
-                ret_3 = re.match(r".*\"\"\"",line)
+                # Remove XXXX""" 独占一行
+                ret_3 = re.match(r".*\"\"\"(?!.*\")(?!.*\')",line)
                 if ret_3:
                         if self.flag==0:
                             #print(line)
@@ -190,65 +212,64 @@ class PY(Driver):
                             self.flag=0
            
     def CheckLine(self,s):
-        # 符号 #
+        # Remove #
         a=re.compile("#(?!!)(?!.*-\*-)(?!.*\')(?!.*\")(?!.*\"\"\").*")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
-        # 符号 """...."""
+        # Remove """...."""
         a=re.compile("\"\"\".*\"\"\"")
         b=re.compile("=[r\s]*\"\"\".*\"\"\"")
         if (len(a.findall(s))!=0)&(len(b.findall(s))==0):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
         return s
 
 class HTML(Driver):
     def Check(self,line,i):
-        # 符号 <!-- XXXXXX -->独占一行 add
+        # Remove <!-- XXXXXX -->独占一行
         ret_1 = re.match(r"^[^\w]*<!--.*-->",line)
         if ret_1:
             #print(line)
             self.RemoveComment.append(i)
-        #   <!-- XXXXXX --> pass [for <!-- XXXXXX & XXXXXX -->]
+        # Pass <!-- XXXXXX -->  [for <!-- XXXXXX & XXXXXX -->]
         a=re.compile("<!--.*-->")
-        # XXXXXX <!--  pass
-        ret_2 = re.match(".*>[\s]*<!--(?!.*-->).*",line)
-        if ret_2:
-            #print(line)
-            self.MultilineComment.append(i+1)
-        # 符号 <!-- XXXXXX 独占一行 add
-        ret_2 = re.match(r"^[\s]*<!--.*",line)
-        if ret_2:
-            if len(a.findall(line))==0:
+        if len(a.findall(line))==0:
+            # Pass XXXXXX <!--
+            ret_2 = re.match(".*>[\s]*<!--(?!.*-->).*",line)
+            if ret_2:
+                #print(line)
+                self.MultilineComment.append(i+1)
+            # Remove <!-- XXXXXX 独占一行 
+            ret_2 = re.match(r"^[\s]*<!--.*",line)
+            if ret_2:
                 #print(line)
                 self.MultilineComment.append(i)
-        # 符号 XXXXXX --> 独占一行 add
-        ret_2 = re.match(r".*-->",line)
-        if ret_2:
-            if len(a.findall(line))==0:
+            # Remove XXXXXX --> 独占一行 
+            ret_2 = re.match(r".*-->",line)
+            if ret_2:
                 #print(line)
                 self.MultilineComment.append(i)
 
     def CheckLine(self,s):
-        # 符号 <!-- XXXXXX -->
+        # Remove <!-- XXXXXX -->
         a=re.compile("<!--.*-->")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
-        # 符号 <!-- XXXXXX
+        # Remove <!-- XXXXXX
         a=re.compile("<!--.*")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
-        # 符号 XXXXXX  -->
+        # Remove XXXXXX  -->
         a=re.compile(".*-->")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
         return s
@@ -256,55 +277,69 @@ class HTML(Driver):
    
 class C(Driver):
     def Check(self,line,i):
-        # 符号 /* XXXXXX */独占一行 add
+        # Remove /* XXXXXX */独占一行
         ret_1 = re.match(r"^[^\w]*/\*.*\*/",line)
         if ret_1:
             #print(line)
             self.RemoveComment.append(i)
-        #   /* XXXXXX */ pass [for /* XXXXXX & XXXXXX */]
+        # Pass  /* XXXXXX */  [for /* XXXXXX & XXXXXX */]
         a=re.compile("/\*.*\*/")
-        #  " /* " pass
+        # Pass " /* " 
         b=re.compile("[\'\"].*/\*.*[\'\"]")
-        if (len(a.findall(line))==0) and (len(b.findall(line))==0):
-            # XXXXXX /*  pass NEXT
+        # Pass " */ "
+        c=re.compile("[\'\"].*\*/.*[\'\"]")
+        if (len(a.findall(line))==0) and (len(b.findall(line))==0)and (len(c.findall(line))==0):
+            # Pass XXXXXX /* XXXXXX  & Remove NEXT
             ret_2 = re.match("^[^\s].*/\*.*",line)
             if ret_2:
                 #print(line)
                 self.MultilineComment.append(i+1)
-            # 符号 /* XXXXXX 独占一行 add
+            # Remove /* XXXXXX 独占一行
             ret_2 = re.match(r"^[\s]*/\*.*",line)
             if ret_2:
                 #print(line)
                 self.MultilineComment.append(i)
-            # 符号 XXXXXX */ 独占一行 add
+            # Remove XXXXXX */ 独占一行
             ret_2 = re.match(r".*\*/",line)
             if ret_2:
                 #print(line)
                 self.MultilineComment.append(i)
     
     def CheckLine(self,s):
-        # 符号 //
+        # Remove //
         a=re.compile("//(?!.*\')(?!.*\").*")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
-        # 符号 /* XXXXXX */
+        # Remove // "XXX"
+        a=re.compile("//.*\".*\".*")
+        if a.findall(s):
+            #print(a.findall(s))
+            t=a.sub("",s)
+            return t
+        # Remove // 'XXX'
+        a=re.compile("//.*\'.*\'.*")
+        if a.findall(s):
+            #print(a.findall(s))
+            t=a.sub("",s)
+            return t
+        # Remove /* XXXXXX */
         a=re.compile("/\*.*\*/(?!.*\')(?!.*\")")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
-        # 符号 /* XXXXXX
+        # Remove /* XXXXXX
         a=re.compile("/\*(?!.*\')(?!.*\").*")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
-        # 符号 XXXXXX  */
+        # Remove XXXXXX */
         a=re.compile(".*\*/(?!.*\')(?!.*\")")
         if a.findall(s):
-            print(a.findall(s))
+            #print(a.findall(s))
             t=a.sub("",s)
             return t
         return s
