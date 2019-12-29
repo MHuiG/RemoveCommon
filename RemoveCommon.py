@@ -58,7 +58,7 @@ class Remover(object):
             self.PrintComment()
             print("===============================")
             #self.PrintNoComment()
-            #self.WriteFile()
+            self.WriteFile()
         except Exception as e:
             print(self.Path)
             print(e)
@@ -94,13 +94,13 @@ class Remover(object):
         """打印注释"""
         for i in self.Comment:
             print(i.encode("utf-8"))
-            #print(i)
+            
             
     def PrintNoComment(self):
         """打印非注释"""
         for i in self.NoComment:
             print(i.encode("utf-8"))
-            #print(i)
+            
             
     def ERRORHandle(self):
         """异常处理"""
