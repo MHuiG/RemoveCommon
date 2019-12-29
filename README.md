@@ -136,7 +136,7 @@ int open( const char *name, int mode, … /* int permissions */ );
 ```
 // 单行注释
 ```
-- # 单行注释
+- 井号（#） 单行注释
 ```
  # 单行注释
 ```
