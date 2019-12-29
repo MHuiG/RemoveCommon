@@ -4,31 +4,41 @@ import re
 
 def walkFile(FilePath):
     """walkFile
-    遍历文件夹文件 匹配文件扩展名
+    Traversal folder file matching file extension
     Args:
         FilePath: 文件路径
     """
     for root, dirs, files in os.walk(FilePath):
         for f in files:
             Path=os.path.join(root, f)
-            #print(Path)
+            print(Path)
             if os.path.splitext(f)[1] in [".py"]:
                 driver=PY()
                 Remover(Path,driver).run()
             if os.path.splitext(f)[1] in [".java",".c",".cpp",".h",".js",".css"]:
                 driver=C()
                 Remover(Path,driver).run()
-            if os.path.splitext(f)[1] in [".html"]:
+            if os.path.splitext(f)[1] in [".html",".xml"]:
                 driver=HTML()
                 Remover(Path,driver).run()
+                driver=C()
+                Remover(Path,driver).run()
+            if os.path.splitext(f)[1] in [".php"]:
+                driver=PHP()
+                Remover(Path,driver).run()
+            if os.path.splitext(f)[1] in [".sql"]:
+                driver=SQL()
+                Remover(Path,driver).run()
+
 
 class Remover(object):
     """Remover过滤器
+    注释行号列表=RemoveSort(RemoveSort(单行注释行号列表+多行注释行号列表)-RemoveSort(例外单行注释行号列表+例外多行注释行号列表))
+    RCN=RemoveSort(RemoveSort(TN)-RemoveSort(FN))
     Attributes:
         Path: 文件路径
         Driver: 文件类型驱动
         OldFileLines: 原始文件行列表
-        RemoveComment: 需要删除的所有注释的行号列表
         Comment: 注释内容列表
         NoComment: 无注释内容列表
     """
@@ -37,7 +47,6 @@ class Remover(object):
         self.Path=Path
         self.Driver=Driver
         self.OldFileLines=list()
-        self.RemoveComment=list()
         self.Comment = list()
         self.NoComment = list()
         
@@ -46,8 +55,10 @@ class Remover(object):
         try:
             self.ReadFile()
             self.RemoverHandle()
-            #self.PrintComment()
-            self.WriteFile()
+            self.PrintComment()
+            print("===============================")
+            #self.PrintNoComment()
+            #self.WriteFile()
         except Exception as e:
             print(self.Path)
             print(e)
@@ -61,18 +72,16 @@ class Remover(object):
 
     def RemoverHandle(self):
         """过滤处理"""
-        self.RemoveComment = self.Driver.DriverHandle(self.OldFileLines)
-        RemoveCommentNumber = sorted(set(self.RemoveComment))
+        self.Driver.NumberDriverHandle(self.OldFileLines)
+        RemoveCommentNumber=sorted(set(self.Driver.TN)-set(self.Driver.FN))
         for i in RemoveCommentNumber:
             self.Comment.append(self.OldFileLines[i])
         NewFileLines = list(i for i in range(len(self.OldFileLines)))
         for i in RemoveCommentNumber:
             NewFileLines.remove(i)
         for i in NewFileLines:
-            temp=self.OldFileLines[i]
-            temp=self.Driver.CheckLine(temp)
-            temp=self.Driver.CheckOne(temp)
-            self.NoComment.append(temp)
+            self.Driver.LineDriverHandle(self.OldFileLines[i])
+            self.NoComment.append(self.Driver.newline)
 
     def WriteFile(self):
         """写入文件"""
@@ -85,6 +94,14 @@ class Remover(object):
         """打印注释"""
         for i in self.Comment:
             print(i.encode("utf-8"))
+            #print(i)
+            
+    def PrintNoComment(self):
+        """打印非注释"""
+        for i in self.NoComment:
+            print(i.encode("utf-8"))
+            #print(i)
+            
     def ERRORHandle(self):
         """异常处理"""
         try:
@@ -96,254 +113,366 @@ class Remover(object):
             shutil.copy(self.Path,".ERROR/")
         except:
             pass
+
 class Driver(object):
     """Driver过滤器驱动
     Attributes:
         OldFileLines: 原始文件
-        MultilineComment: 多行注释列表
-        RemoveComment: 需要删除的所有注释的行号列表
+        TN: 临时注释行号列表
+        FN: 例外注释行号列表
+        line: 当前行
+        newline: 新行
+        i: 当前行号
         flag: 标记
+        flage: 例外标记
     """
     def __init__(self):
         """初始化"""
         self.OldFileLines=list()
-        self.MultilineComment=list()
-        self.RemoveComment=list()
+        self.TN=list()
+        self.FN=list()
+        self.line=""
+        self.newline=""
+        self.i=0
         self.flag=0
+        self.flage=0
         
-    def DriverHandle(self,OldFileLines):
-        """过滤器驱动处理
+    def NumberDriverHandle(self,OldFileLines):
+        """行号过滤器驱动处理
             将两个多行注释行号之间所有的行添加到 # 号列表中
         Args:
             OldFileLines: 原始文件
-        return:
-            需要删除的所有注释的 行号 集合
         """
         self.OldFileLines=OldFileLines
-        i = 0
+        self.i=0
         for line in self.OldFileLines:
-            # Remove 空行
-            ret_0 = re.match(r"^[\s]*$",line)
-            if ret_0:
-                self.RemoveComment.append(i)
-            self.Check(line,i)
-            i=i+1
-        while self.MultilineComment != []:
-            a = self.MultilineComment.pop()
-            b = self.MultilineComment.pop()
-            temp = b
-            while temp <= a:
-                self.RemoveComment.append(temp)
-                temp += 1
-        return self.RemoveComment
+            self.line=line
+            if self.flag==1:
+                self.TN.append(self.i)
+            if self.flage==1:
+                self.FN.append(self.i)
+            self.NumberDriver()
+            self.i=self.i+1
 
-    def CheckOne(self,s):
-        """移除空行(单行检查规则)"""
-        a=re.compile("^[\s]*$")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        return s
-
-    def Check(self,line,i):
-        """多行检查规则
+    def LineDriverHandle(self,line):
+        """行值过滤器驱动处理
+            处理单行
         Args:
-            line: 原始文件行
-            i: line所对应的行号
+            line: 原始行值
+        """
+        self.flag=0
+        self.flage=0
+        self.line=line
+        self.LineDriver()
+
+
+    def SNR(self,s):
+        """单行注释行号过滤规则"""
+        if re.match(s,self.line):
+            self.TN.append(self.i)
+
+    def MNR(self,l,r):
+        """多行注释行号过滤规则"""
+        if re.match(l,self.line) and self.flag==0:
+            self.flag=1
+            self.TN.append(self.i)
+            return
+        if re.match(r,self.line) and self.flag==1:
+            self.flag=0
+            return
+
+    def ESNR(self,s):
+        """例外单行注释行号过滤规则"""
+        if re.match(s,self.line):
+            self.FN.append(self.i)
+
+    def EMNR(self,l,r):
+        """例外多行注释行号过滤规则"""
+        if re.match(l,self.line):
+            self.flage=1
+            self.FN.append(self.i)
+            return
+        if re.match(r,self.line):
+            self.flage=0
+            return
+
+    def LR(self,s):
+        """注释行值过滤规则"""
+        if self.flag==0:
+            self.newline=self.line
+        if self.flage==0:
+            a=re.compile(s)
+            if a.findall(self.line):
+                print(a.findall(self.line))
+                self.newline=a.sub("",self.line)
+                if self.flag==0:
+                    self.flag=1
+        else:
+            self.flage=0
+                
+    def ELR(self,s):
+        """例外注释行值过滤规则
+            ELR() needs to be before LR()
+            one or more ELR() 只对一个 LR() work
+        """
+        a=re.compile(s)
+        if a.findall(self.line):
+            self.flage=1
+
+
+    def NumberDriver(self):
+        """Line number filter drive logic
+        self.SNR()
+        self.MNR()
+        self.ESNR()
+        self.EMNR()
         """
         pass
     
-    def CheckLine(self,s):
-        """单行检查Remove规则
-        Args:
-            s: 原始文件行
-        return:
-            处理后的行
+    def LineDriver(self):
+        """Row value filter drive logic
+        Waring: only one LR() work for each line
+                ELR() needs to be before LR()
+                one or more ELR() work for only one LR() 
+
+            self.ELR()
+            self.LR()
+            
+            self.ELR()
+            self.ELR()
+            self.LR()
         """
-        return s
+        self.newline=self.line
 
-class PY(Driver):
-    def Check(self,line,i):
-        # Remove # 独占一行
-        ret_1 = re.match(r"^[^\w]*#+",line)
-        ret_1_2 = re.match(r"#.*-\*-",line)
-        ret_1_3 = re.match(r"#!",line)
-        if ret_1_2:
-            pass
-        elif ret_1_3:
-            pass
-        elif ret_1:
-            self.RemoveComment.append(i)
-        # Pass """....""" 
-        a=re.compile("\"\"\".*\"\"\"")
-        b=re.compile("=[r\s]*\"\"\".*\"\"\"")
-        # Pass ="""
-        c=re.compile(".*=[\sr]*\"\"\".*")
-        # Pass =""" 独占一行
-        ret_2 = re.match(r".*=[\sr]*\"\"\".*",line)
-        if ret_2:
-            #print(line)
-            self.flag=1
-        if  (len(a.findall(line))==0)&(len(b.findall(line))==0)&(len(c.findall(line))==0):
-            # Pass # XXX""" 独占一行
-            ret_2 = re.match(r".*#.*\"\"\".*",line)
-            if ret_2:
-                #print(line)
-                self.flag=1
-            # Remove """XXXXX 独占一行
-            ret_2 = re.match(r"[\sr]*(?!\=.*)\"\"\"(?!.*\"\"\")",line)
-            if ret_2:
-                if self.flag==0:
-                    #print(line)
-                    self.MultilineComment.append(i)
-                if self.flag==1:
-                    #print(line)
-                    self.flag=0
-            else:
-                # Remove XXXX""" 独占一行
-                ret_3 = re.match(r".*\"\"\"(?!.*\")(?!.*\')",line)
-                if ret_3:
-                        if self.flag==0:
-                            #print(line)
-                            self.MultilineComment.append(i)
-                        if self.flag==1:
-                            #print(line)
-                            self.flag=0
-           
-    def CheckLine(self,s):
-        # Remove #
-        a=re.compile("#(?!!)(?!.*-\*-)(?!.*\')(?!.*\")(?!.*\"\"\").*")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        # Remove """...."""
-        a=re.compile("\"\"\".*\"\"\"")
-        b=re.compile("=[r\s]*\"\"\".*\"\"\"")
-        if (len(a.findall(s))!=0)&(len(b.findall(s))==0):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        return s
 
-class HTML(Driver):
-    def Check(self,line,i):
-        # Remove <!-- XXXXXX -->独占一行
-        ret_1 = re.match(r"^[^\w]*<!--.*-->",line)
-        if ret_1:
-            #print(line)
-            self.RemoveComment.append(i)
-        # Pass <!-- XXXXXX -->  [for <!-- XXXXXX & XXXXXX -->]
-        a=re.compile("<!--.*-->")
-        if len(a.findall(line))==0:
-            # Pass XXXXXX <!--
-            ret_2 = re.match(".*>[\s]*<!--(?!.*-->).*",line)
-            if ret_2:
-                #print(line)
-                self.MultilineComment.append(i+1)
-            # Remove <!-- XXXXXX 独占一行 
-            ret_2 = re.match(r"^[\s]*<!--.*",line)
-            if ret_2:
-                #print(line)
-                self.MultilineComment.append(i)
-            # Remove XXXXXX --> 独占一行 
-            ret_2 = re.match(r".*-->",line)
-            if ret_2:
-                #print(line)
-                self.MultilineComment.append(i)
 
-    def CheckLine(self,s):
-        # Remove <!-- XXXXXX -->
-        a=re.compile("<!--.*-->")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        # Remove <!-- XXXXXX
-        a=re.compile("<!--.*")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        # Remove XXXXXX  -->
-        a=re.compile(".*-->")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        return s
-
-   
-class C(Driver):
-    def Check(self,line,i):
-        # Remove /* XXXXXX */独占一行
-        ret_1 = re.match(r"^[^\w]*/\*.*\*/",line)
-        if ret_1:
-            #print(line)
-            self.RemoveComment.append(i)
-        # Pass  /* XXXXXX */  [for /* XXXXXX & XXXXXX */]
-        a=re.compile("/\*.*\*/")
-        # Pass " /* " 
-        b=re.compile("[\'\"].*/\*.*[\'\"]")
-        # Pass " */ "
-        c=re.compile("[\'\"].*\*/.*[\'\"]")
-        if (len(a.findall(line))==0) and (len(b.findall(line))==0)and (len(c.findall(line))==0):
-            # Pass XXXXXX /* XXXXXX  & Remove NEXT
-            ret_2 = re.match("^[^\s].*/\*.*",line)
-            if ret_2:
-                #print(line)
-                self.MultilineComment.append(i+1)
-            # Remove /* XXXXXX 独占一行
-            ret_2 = re.match(r"^[\s]*/\*.*",line)
-            if ret_2:
-                #print(line)
-                self.MultilineComment.append(i)
-            # Remove XXXXXX */ 独占一行
-            ret_2 = re.match(r".*\*/",line)
-            if ret_2:
-                #print(line)
-                self.MultilineComment.append(i)
     
-    def CheckLine(self,s):
+class PY(Driver):
+    def NumberDriver(self):
+        # Remove 空行
+        self.SNR("^[\s]*$")
+        # Remove # 独占一行
+        self.SNR("^[^\w]*#+")
+        # Pass #-*- coding: utf-8 -*-
+        self.ESNR("#.*coding")
+        # Pass #!env
+        self.ESNR("#!")
+        # Remove """....""" 独占一行
+        self.SNR("^[^\w]*\"\"\".*\"\"\"")
+        # Remove '''....''' 独占一行
+        self.SNR("^[^\w]*\'\'\'.*\'\'\'")
+        # Remove """....""" 多行
+        self.MNR("^[^#\"\']*\"\"\"(?!.*\"\"\")","((?!#)(?!\"\"\").)*\"\"\"(?!.*\"\"\")")
+        # Pass ="""
+        self.EMNR("^[^#\"\']*=[r\s]*\"\"\"","((?!#)(?!\"\"\").)*\"\"\"(?!.*\"\"\")")
+        # Remove '''....''' 多行
+        self.MNR("^[^#\"\']*\'\'\'(?!.*\'\'\')","((?!#)(?!\'\'\').)*\'\'\'(?!.*\'\'\')")
+        # Pass ='''
+        self.EMNR("^[^#\"\']*=[r\s]*\'\'\'","((?!#)(?!\'\'\').)*\'\'\'(?!.*\'\'\')")
+        # Pass XXXX  """ .....
+        self.ESNR(".*[\d\w\t]{1,}\"\"\"")
+        
+    def LineDriver(self):
+        # Pass #!env
+        self.ELR("#!.*")
+        # Pass #-*- coding: utf-8 -*-
+        self.ELR("#.*coding:")
+        # Pass '#'
+        self.ELR("\'.*#.*\'")
+        # Pass "#"
+        self.ELR("\".*#.*\"")
+        # Pass '''#'''
+        self.ELR("\'\'\'.*#.*\'\'\'")
+        # Pass """#"""
+        self.ELR("\"\"\".*#.*\"\"\"")
+        # Remove #
+        self.LR("#.*")
+        # Pass =""" ...
+        self.ELR("^[^#\"\']*=[r\s]*\"\"\"")
+        # Remove """...."""
+        self.LR("^[^#\"\']*\"\"\".*\"\"\"")
+        # Remove '''....'''
+        self.LR("^[^#\"\']*\'\'\'.*\'\'\'")
+        # Pass =""" ...
+        self.ELR("^[^#\"\']*=[r\s]*\"\"\"")
+        # Pass """ 独占一行
+        self.ELR("^[^\w]*\"\"\".*")
+        # Remove ..."""
+        self.LR("^[^#\"\']*\"\"\".*")
+        # Pass =''' ...
+        self.ELR("^[^#\"\']*=[r\s]*\'\'\'")
+        # Pass ''' 独占一行
+        self.ELR("^[^\w]*\'\'\'.*")
+        # Remove ...'''
+        self.LR("^[^#\"\']*\'\'\'.*")
+
+        
+class HTML(Driver):
+    def NumberDriver(self):
+        # Remove 空行
+        self.SNR("^[\s]*$")
+        # Remove <!-- XXXXXX -->独占一行
+        self.SNR("^[^\w]*<!--.*-->")
+        # Pass <!-- XXXXXX --> 单行 [for <!-- XXXXXX & XXXXXX -->]
+        self.ESNR("<!--.*-->")
+        # Remove  <!-- XXXXXX --> 多行
+        self.MNR(".*<!--(?!.*-->).*","((?!<!--).)*-->")
+        # Pass XXXXXX <!--
+        self.ESNR(".*>[\s]*<!--(?!.*-->).*")
+        # Pass XXXXXX -->
+        self.ESNR("((?!<!--).)*-->.*")
+        # Pass <!--[if lt IE 9]><![endif]-->
+        self.ESNR("<!--.*[if.*].*>.*<!.*[.*endif.*].*-->")
+        # Pass <!--[if lt IE 9]>
+        self.ESNR("<!--.*[if.*].*>")
+        # Pass <![endif]-->
+        self.ESNR("<!.*[.*endif.*].*-->")
+
+        
+    def LineDriver(self):
+        # Pass <!--[if lt IE 9]><![endif]-->
+        self.ELR("<!--.*[if.*].*>.*<!.*[.*endif.*].*-->")
+        # Pass <!--[if lt IE 9]>
+        self.ELR("<!--.*[if.*].*>")
+        # Pass <![endif]-->
+        self.ELR("<!.*[.*endif.*].*-->")
+        # Remove <!-- XXXXXX -->
+        self.LR("<!--.*-->")
+        # Pass <!--[if lt IE 9]><![endif]-->
+        self.ELR("<!--.*[if.*].*>.*<!.*[.*endif.*].*-->")
+        # Pass <!--[if lt IE 9]>
+        self.ELR("<!--.*[if.*].*>")
+        # Remove <!-- XXXXXX
+        self.LR("<!--(?!.*-->).*")
+        # Pass <!--[if lt IE 9]><![endif]-->
+        self.ELR("<!--.*[if.*].*>.*<!.*[.*endif.*].*-->")
+        # Pass <![endif]-->
+        self.ELR("<!.*[.*endif.*].*-->")
+        # Remove XXXXXX  -->
+        self.LR("((?!<!--).)*-->")
+
+class C(Driver):
+    def NumberDriver(self):
+        # Remove 空行
+        self.SNR("^[\s]*$")
+        # Remove /* XXXXXX */独占一行
+        self.SNR("^[^\w]*/\*.*\*/")
+        # Remove  /* XXXXXX */ 多行
+        self.MNR(".*/\*(?!.*\*/).*","((?!/\*).)*\*/")
+        # Pass XXXXXX /*
+        self.ESNR(".*/\*.*")
+        
+    def LineDriver(self):
+        # Pass '//'
+        self.ELR("\'.*//.*\'")
+        # Pass "//"
+        self.ELR("\".*//.*\"")
         # Remove //
-        a=re.compile("//(?!.*\')(?!.*\").*")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        # Remove // "XXX"
-        a=re.compile("//.*\".*\".*")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        # Remove // 'XXX'
-        a=re.compile("//.*\'.*\'.*")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
+        self.LR("//.*")
+        # Pass '/* XXXXXX */'
+        self.ELR("\'.*/\*.*\*/.*\'")
+        # Pass "/* XXXXXX */"
+        self.ELR("\".*/\*.*\*/.*\"")
         # Remove /* XXXXXX */
-        a=re.compile("/\*.*\*/(?!.*\')(?!.*\")")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
+        self.LR("/\*.*\*/")
+        # Pass '/* XXXXXX'
+        self.ELR("\'/\*.*\'")
+        # Pass "/* XXXXXX"
+        self.ELR("\"/\*.*\"")
         # Remove /* XXXXXX
-        a=re.compile("/\*(?!.*\')(?!.*\").*")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        # Remove XXXXXX */
-        a=re.compile(".*\*/(?!.*\')(?!.*\")")
-        if a.findall(s):
-            #print(a.findall(s))
-            t=a.sub("",s)
-            return t
-        return s
- 
+        self.LR("/\*(?!.*\*/).*")
+        # Pass 'XXXXXX*/'
+        self.ELR("\'.*\*/\'")
+        # Pass "XXXXXX*/"
+        self.ELR("\".*\*/\"")
+
+class SQL(Driver):
+    def NumberDriver(self):
+        # Remove 空行
+        self.SNR("^[\s]*$")
+        # Remove /* XXXXXX */独占一行
+        self.SNR("^[^\w]*/\*.*\*/")
+        # Remove  /* XXXXXX */ 多行
+        self.MNR(".*/\*(?!.*\*/).*","((?!/\*).)*\*/")
+        # Pass XXXXXX /*
+        self.ESNR(".*/\*.*")
+        
+    def LineDriver(self):
+        # Pass '--'
+        self.ELR("\'.*--.*\'")
+        # Pass "--"
+        self.ELR("\".*--.*\"")
+        # Remove --
+        self.LR("--.*")
+        # Pass '/* XXXXXX */'
+        self.ELR("\'.*/\*.*\*/.*\'")
+        # Pass "/* XXXXXX */"
+        self.ELR("\".*/\*.*\*/.*\"")
+        # Pass /*! XXXXXX */;
+        self.ELR("/\*!.*\*/;")
+        # Remove /* XXXXXX */
+        self.LR("/\*.*\*/")
+        # Pass '/* XXXXXX'
+        self.ELR("\'.*/\*.*\'")
+        # Pass "/* XXXXXX"
+        self.ELR("\".*/\*.*\"")
+        # Remove /* XXXXXX
+        self.LR("/\*(?!.*\*/).*")
+        # Pass 'XXXXXX*/'
+        self.ELR("\'.*\*/.*\'")
+        # Pass "XXXXXX*/"
+        self.ELR("\".*\*/.*\"")
+
+class PHP(Driver):
+    def NumberDriver(self):
+        # Remove 空行
+        self.SNR("^[\s]*$")
+        # Remove # 独占一行
+        self.SNR("^[^\w]*#+")
+        # Remove /* XXXXXX */独占一行
+        self.SNR("^[^\w]*/\*.*\*/")
+        # Remove  /* XXXXXX */ 多行
+        self.MNR(".*/\*(?!.*\*/).*","((?!/\*).)*\*/")
+        # Pass XXXXXX /*
+        self.ESNR(".*/\*.*")
+        
+    def LineDriver(self):
+        # Pass '#'
+        self.ELR("\'.*#.*\'")
+        # Pass "#"
+        self.ELR("\".*#.*\"")
+        # Pass '''#'''
+        self.ELR("\'\'\'.*#.*\'\'\'")
+        # Pass """#"""
+        self.ELR("\"\"\".*#.*\"\"\"")
+        # Remove #
+        self.LR("#.*")
+        # Pass '//'
+        self.ELR("\'.*//.*\'")
+        # Pass "//"
+        self.ELR("\".*//.*\"")
+        # Remove //
+        self.LR("//.*")
+        # Pass '/* XXXXXX */'
+        self.ELR("\'.*/\*.*\*/.*\'")
+        # Pass "/* XXXXXX */"
+        self.ELR("\".*/\*.*\*/.*\"")
+        # Remove /* XXXXXX */
+        self.LR("/\*.*\*/")
+        # Pass '/* XXXXXX'
+        self.ELR("\'/\*.*\'")
+        # Pass "/* XXXXXX"
+        self.ELR("\"/\*.*\"")
+        # Remove /* XXXXXX
+        self.LR("/\*(?!.*\*/).*")
+        # Pass 'XXXXXX*/'
+        self.ELR("\'.*\*/.*\'")
+        # Pass "XXXXXX*/"
+        self.ELR("\".*\*/.*\"")
+
+
+
+
 if __name__=="__main__":
     
     FilePath="./File/"
