@@ -1,5 +1,6 @@
 # RemoveCommon
-[![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)  [![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.svg?v=103)](https://opensource.org/licenses/GPL-3.0/)
+
+[![Open Source Love](https://cdn.jsdelivr.net/gh/MHuiG/imgbed/github/open-source.svg)](https://github.com/ellerbrock/open-source-badges/)[![GPL Licence](https://cdn.jsdelivr.net/gh/MHuiG/imgbed/github/gpl.svg)](https://opensource.org/licenses/GPL-3.0/)
 # 删除 python java C CPP JS CSS html xml  php sql 注释
 
 ## Python 
