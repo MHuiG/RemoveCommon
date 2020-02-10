@@ -12,23 +12,25 @@ def walkFile(FilePath):
         for f in files:
             Path=os.path.join(root, f)
             print(Path)
-            if os.path.splitext(f)[1] in [".py"]:
-                driver=PY()
-                Remover(Path,driver).run()
-            if os.path.splitext(f)[1] in [".java",".c",".cpp",".h",".js",".css"]:
-                driver=C()
-                Remover(Path,driver).run()
-            if os.path.splitext(f)[1] in [".html",".xml"]:
-                driver=HTML()
-                Remover(Path,driver).run()
-                driver=C()
-                Remover(Path,driver).run()
-            if os.path.splitext(f)[1] in [".php"]:
-                driver=PHP()
-                Remover(Path,driver).run()
-            if os.path.splitext(f)[1] in [".sql"]:
-                driver=SQL()
-                Remover(Path,driver).run()
+            if "min" not in Path.split("."):
+                if os.path.splitext(f)[1] in [".py"]:
+                    driver=PY()
+                    Remover(Path,driver).run()
+                if os.path.splitext(f)[1] in [".java",".c",".cpp",".h",".js",".css"]:
+                    driver=C()
+                    Remover(Path,driver).run()
+                if os.path.splitext(f)[1] in [".html",".xml"]:
+                    driver=HTML()
+                    Remover(Path,driver).run()
+                    driver=C()
+                    Remover(Path,driver).run()
+                if os.path.splitext(f)[1] in [".php"]:
+                    driver=PHP()
+                    Remover(Path,driver).run()
+                if os.path.splitext(f)[1] in [".sql"]:
+                    driver=SQL()
+                    Remover(Path,driver).run()
+            
 
 
 class Remover(object):
@@ -58,7 +60,7 @@ class Remover(object):
             self.PrintComment()
             print("===============================")
             #self.PrintNoComment()
-            self.WriteFile()
+            #self.WriteFile()
         except Exception as e:
             print(self.Path)
             print(e)
@@ -94,13 +96,13 @@ class Remover(object):
         """打印注释"""
         for i in self.Comment:
             print(i.encode("utf-8"))
-            
+            #print(i)
             
     def PrintNoComment(self):
         """打印非注释"""
         for i in self.NoComment:
             print(i.encode("utf-8"))
-            
+            #print(i)
             
     def ERRORHandle(self):
         """异常处理"""
@@ -361,12 +363,16 @@ class C(Driver):
         self.MNR(".*/\*(?!.*\*/).*","((?!/\*).)*\*/")
         # Pass XXXXXX /*
         self.ESNR(".*/\*.*")
+        # Pass XXXXXX */ XXXXX
+        self.ESNR(".*\*/.*")
         
     def LineDriver(self):
         # Pass '//'
         self.ELR("\'.*//.*\'")
         # Pass "//"
         self.ELR("\".*//.*\"")
+        # Pass http(s)://
+        self.ELR(".*://.*")
         # Remove //
         self.LR("//.*")
         # Pass '/* XXXXXX */'
@@ -385,6 +391,7 @@ class C(Driver):
         self.ELR("\'.*\*/\'")
         # Pass "XXXXXX*/"
         self.ELR("\".*\*/\"")
+
 
 class SQL(Driver):
     def NumberDriver(self):
