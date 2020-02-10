@@ -60,7 +60,7 @@ class Remover(object):
             self.PrintComment()
             print("===============================")
             #self.PrintNoComment()
-            #self.WriteFile()
+            self.WriteFile()
         except Exception as e:
             print(self.Path)
             print(e)
@@ -387,10 +387,15 @@ class C(Driver):
         self.ELR("\"/\*.*\"")
         # Remove /* XXXXXX
         self.LR("/\*(?!.*\*/).*")
+        # Pass /* XXXXXX */独占一行
+        self.ELR("^[^\w]*/\*.*\*/")
+        # Remove  */
+        self.LR("((?!/\*).)*\*/")
         # Pass 'XXXXXX*/'
         self.ELR("\'.*\*/\'")
         # Pass "XXXXXX*/"
         self.ELR("\".*\*/\"")
+
 
 
 class SQL(Driver):
@@ -425,6 +430,10 @@ class SQL(Driver):
         self.ELR("\".*/\*.*\"")
         # Remove /* XXXXXX
         self.LR("/\*(?!.*\*/).*")
+        # Pass /* XXXXXX */独占一行
+        self.ELR("^[^\w]*/\*.*\*/")
+        # Remove  */
+        self.LR("((?!/\*).)*\*/")
         # Pass 'XXXXXX*/'
         self.ELR("\'.*\*/.*\'")
         # Pass "XXXXXX*/"
@@ -458,6 +467,8 @@ class PHP(Driver):
         self.ELR("\'.*//.*\'")
         # Pass "//"
         self.ELR("\".*//.*\"")
+        # Pass http(s)://
+        self.ELR(".*://.*")
         # Remove //
         self.LR("//.*")
         # Pass '/* XXXXXX */'
@@ -472,6 +483,10 @@ class PHP(Driver):
         self.ELR("\"/\*.*\"")
         # Remove /* XXXXXX
         self.LR("/\*(?!.*\*/).*")
+        # Pass /* XXXXXX */独占一行
+        self.ELR("^[^\w]*/\*.*\*/")
+        # Remove  */
+        self.LR("((?!/\*).)*\*/")
         # Pass 'XXXXXX*/'
         self.ELR("\'.*\*/.*\'")
         # Pass "XXXXXX*/"
@@ -482,6 +497,6 @@ class PHP(Driver):
 
 if __name__=="__main__":
     
-    FilePath="./File/"
+    FilePath="./public/"
     walkFile(FilePath)
 
